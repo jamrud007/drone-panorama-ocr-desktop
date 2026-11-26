@@ -1,4 +1,4 @@
-# Halotec Container OCR Desktop
+# Drone Panorama OCR Desktop (`drone-panorama-ocr-desktop`)
 
 Windows desktop application for automated shipping container detection, drone video panorama stitching, ISO 6346 container number validation, and cloud OCR recognition.
 
@@ -6,10 +6,10 @@ Windows desktop application for automated shipping container detection, drone vi
 
 - **Runtime & OS:** Python 3.11 / 3.12 (64-bit Windows 10/11)
 - **Desktop GUI:** PySide6 (`6.11.1`)
-- **Local AI Detection:** ONNX Runtime (`onnxruntime-gpu` CUDA / DirectML / CPU fallback), OpenCV (`4.12.0.88`), NumPy (`2.2.6`), SciPy (`1.16.3`)
+- **AI Detection:** ONNX Runtime (`onnxruntime-gpu` CUDA / DirectML / CPU fallback), OpenCV (`4.12.0.88`), NumPy (`2.2.6`), SciPy (`1.16.3`)
 - **Tracking & Stitching Pipeline:** PyTorch (`2.9.1+cu126`), Torchvision (`0.24.1`), Ultralytics (`8.3.248`), `lap` (ByteTrack), Kornia (`0.9.2`), LightGlue (`ALIKED` + `LightGlue`)
-- **Persistence & Security:** SQLite (`WAL` mode, single-writer in `Orchestrator`), Windows DPAPI via `ctypes` (`data/.token.dpapi`), Windows `SingleInstanceMutex` & `WindowsJobObject`
-- **Cloud OCR Client:** HTTP REST (`requests`) against the configured OCR backend (`api.url` or `OCR_API_URL`) supporting `/login`, `/refresh_token`, and `/api/ocr`
+- **Persistence & Security:** SQLite (`WAL` mode, single-writer in `Orchestrator`), Windows DPAPI via `ctypes`, Windows `SingleInstanceMutex` & `WindowsJobObject`
+- **Cloud OCR Client:** HTTP REST (`requests`) against the configured OCR service endpoint (`api.url` or `OCR_API_URL`) supporting `/login`, `/refresh_token`, and `/api/ocr`
 - **Packaging:** PyInstaller (`desktop.spec`, `scripts/build_exe.py`) and Inno Setup (`installer.iss`)
 
 ## Processing Pipeline
@@ -21,7 +21,7 @@ MainWindow (PySide6 UI Thread)
   │     │     ├── Stage 1: YOLO + ByteTrack container tracking & Laplacian blur filter
   │     │     ├── Stage 2: Camera ego-motion route ordering across container stacks
   │     │     ├── Stage 3: ALIKED + LightGlue + RANSAC panorama stitching
-  │     │     ├── Stage 4: Local text ROI detection on panorama (iso_code, container_number)
+  │     │     ├── Stage 4: Text ROI detection on panorama (iso_code, container_number)
   │     │     └── 4K native crop extraction via homography (panorama fallback) + 90-deg retry (TOP)
   │     ├── FRONT_REAR ──> Direct OnnxDetector two-stage tracking (no stitching) + LK camera motion
   │     ├── OCR Loop ──> HalotecOcrClient POST /api/ocr (cropped text ROIs -> ISO 6346 check digit)
@@ -29,39 +29,40 @@ MainWindow (PySide6 UI Thread)
   └── SQLite (data/app.db) + RAW/Annotated Inspection & Manual ISO Override UI
 ```
 
-### Key Pipeline Behavior
+### Pipeline Modes and Contracts
 
 - **Camera Modes:**
-  - `LEFT_RIGHT`: Side passes; runs tracking, panorama stitching, Stage 4 ROI detection, 4K crop selection, OCR, and annotated video export.
+  - `LEFT_RIGHT`: Side passes; runs tracking, panorama stitching, Stage 4 ROI detection, 4K crop extraction, OCR, and annotated video export.
   - `TOP`: Top-down roof passes; runs the same stitching pipeline plus adaptive 90-degree CW/CCW crop rotation for longitudinal roof numbers.
   - `FRONT_REAR`: Front/rear door passes; skips stitching and performs direct motion-compensated 5-class ONNX detection on sampled video frames.
-- **ONNX Class Contract (`container_detection_model.onnx`, static `480x480` FP32):**
+- **ONNX Class Mapping (`container_detection_model.onnx`, static `480x480` FP32):**
   `0: container_left_right`, `1: iso_code`, `2: container_number`, `3: container_rear_front`, `4: container_top`.
 - **Zero Double-Detection & API Contract:**
-  Text ROIs are cropped locally from RAW images and submitted to `POST /api/ocr` (`gate` must be a numeric string such as `"1"`; non-numeric values trigger HTTP 500 on the backend).
-- **Compute Auto-Selection:**
+  Text ROIs are cropped from RAW images and submitted to `POST /api/ocr` with `gate` as a numeric string (for example `"1"`; non-numeric values trigger HTTP 500 on the backend).
+- **Compute Provider Selection:**
   `stitching.device = "auto"` probes `CUDAExecutionProvider` (NVIDIA), `DmlExecutionProvider` (DirectML), and falls back to `CPUExecutionProvider`.
 
 ## Repository Structure
 
 ```text
-.
-├── main.py                              # GUI entry point, SingleInstanceMutex, DPAPI check, --self-check
+drone-panorama-ocr-desktop/
+├── main.py                              # GUI entry point, SingleInstanceMutex, auth check, --self-check
 ├── desktop.spec                         # PyInstaller bundle specification
 ├── installer.iss                        # Inno Setup Windows installer script
 ├── pyproject.toml                       # Project metadata, ruff, and mypy config
 ├── requirements.txt                     # Core runtime dependencies
-├── requirements-dev.txt                 # Dev, QA (pytest/psutil), ONNX export, and PyInstaller deps
-├── .env.example                         # Optional environment variable overrides
-├── config/config.example.json           # Non-secret default configuration template
-├── data/.gitkeep                        # Runtime folder placeholder (local app.db & .token.dpapi gitignored)
-├── outputs/.gitkeep                     # Job session output placeholder (images/, logs/, _annotated.mp4)
+├── requirements-dev.txt                 # Packaging (PyInstaller), QA (psutil), and ONNX export dependencies
+├── .env.example                         # Environment variable template (OCR_API_URL, OCR_API_GATE, QT_QPA_PLATFORM)
+├── config/
+│   └── config.example.json              # Default non-secret configuration template
+├── data/.gitkeep                        # Runtime directory for SQLite database and encrypted DPAPI token
+├── outputs/.gitkeep                     # Runtime output directory (images/, logs/, _annotated.mp4)
 ├── src/
 │   ├── config.py                        # Typed AppConfig loader & frozen _MEIPASS path resolution
 │   ├── database/db.py                   # SQLite persistence (jobs, containers, detections, audit_logs)
-│   ├── ocr_client/client.py             # OCR API HTTP client, retry/refresh, ISO code regex parsing
+│   ├── ocr_client/client.py             # OCR API HTTP client, token refresh, ISO code regex parsing
 │   ├── orchestrator/
-│   │   ├── engine.py                    # Background job scheduler, 4K crop selection, OCR loop & logs
+│   │   ├── engine.py                    # Background job scheduler, 4K crop selection, OCR loop & logging
 │   │   └── annotation_motion.py         # Lucas-Kanade optical flow & annotated video renderer
 │   ├── recognition/detector.py          # ONNX Runtime wrapper & GPU/CPU preflight diagnostics
 │   ├── stitching/adapter.py             # Stitching runner + WindowsJobObject subprocess fallback
@@ -71,18 +72,21 @@ MainWindow (PySide6 UI Thread)
 │   ├── pipeline_yolo_paronama.py        # Tracking, ALIKED/LightGlue stitching & Stage 4 ROI detector
 │   ├── hyper_config/                    # YOLO training & custom ByteTrack YAML configs
 │   ├── trainer/                         # Model training (train.py) & ONNX export (export.py)
-│   └── weight/MANIFEST.json             # Checksum & schema manifest for excluded ONNX model weights
+│   └── weight/MANIFEST.json             # SHA-256 & tensor metadata for the ONNX weights (weights not tracked in Git)
 └── scripts/
-    ├── build_exe.py                     # PyInstaller packaging helper
-    ├── qa_verification.py               # Environment, model, API contract & build QA script
+    ├── build_exe.py                     # PyInstaller executable builder
+    ├── qa_verification.py               # Environment, model weights, API contract & build verification script
     └── run_video_job.py                 # Headless CLI runner for single video jobs
 ```
 
-## Setup and Installation
+## Setup After Cloning
 
-1. **Create a Python 3.11 or 3.12 virtual environment (Windows 10/11 64-bit):**
+1. **Clone the repository and create a Python 3.11 or 3.12 virtual environment (Windows 10/11 64-bit):**
 
 ```powershell
+git clone https://github.com/jamrud007/drone-panorama-ocr-desktop.git
+cd drone-panorama-ocr-desktop
+
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -91,32 +95,31 @@ python -m pip install --upgrade pip
 2. **Install dependencies:**
 
 ```powershell
-# For NVIDIA CUDA 12.6 workstations:
+# Optional: NVIDIA CUDA 12.6 PyTorch wheels
 pip install torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cu126
 
-# Runtime only:
+# Core runtime dependencies:
 pip install -r requirements.txt
 
-# Or full dev / export / PyInstaller packaging dependencies:
+# Or runtime + PyInstaller / ONNX export / QA tools:
 pip install -r requirements-dev.txt
 ```
 
-*(For CPU-only machines without CUDA drivers, use `onnxruntime` instead of `onnxruntime-gpu`.)*
+*(For CPU-only machines without CUDA drivers, install `onnxruntime` instead of `onnxruntime-gpu`.)*
 
-3. **Restore the ONNX model weights (`98.73 MiB`, excluded from Git):**
-   - Obtain `container_detection_model.onnx` separately from your team's asset storage / GitHub Releases.
-   - Place it at `container-detection-drone-view/weight/container_detection_model.onnx`.
+3. **Add the ONNX model weights (`98.73 MiB`, not stored in Git):**
+   - Download/copy `container_detection_model.onnx` from your team's model distribution storage and place it at `container-detection-drone-view/weight/container_detection_model.onnx`.
    - Verify SHA-256 matches `container-detection-drone-view/weight/MANIFEST.json` (`BCAA5D96715268A32905227CE05CC328898E3DA957FCEFB7399019D8D70E795F`):
 
 ```powershell
 Get-FileHash container-detection-drone-view\weight\container_detection_model.onnx -Algorithm SHA256
 ```
 
-4. **Configure OCR service & credentials:**
-   - Copy `config/config.example.json` to `config/config.json` and set `api.url` to your internal OCR service URL (keep `api.gate` as a numeric string such as `"1"`), or pass `OCR_API_URL` / `OCR_API_GATE` environment variables.
-   - Launch the desktop GUI and authenticate via Login / Settings so the JWT token is stored encrypted in `data/.token.dpapi` (never commit tokens or `config/config.json`).
+4. **Configure OCR endpoint and credentials:**
+   - Copy `config/config.example.json` to `config/config.json` and set `api.url` to your OCR service URL (keeping `api.gate` as a numeric string such as `"1"`), or configure `OCR_API_URL` and `OCR_API_GATE` environment variables.
+   - Launch the desktop application and authenticate through the Login or Settings dialog to store the encrypted JWT token in `data/.token.dpapi`.
 
-## Usage and Packaging
+## Running and Packaging
 
 ```powershell
 # Launch desktop application
@@ -125,24 +128,30 @@ python main.py
 # Run GPU / ONNX preflight check (writes self_check.json)
 python main.py --self-check
 
-# Run a video job via CLI without GUI
-python scripts/run_video_job.py --video "path\to\video.mp4" --mode LEFT_RIGHT --name "SampleJob"
+# Run a single job via CLI without opening the GUI
+python scripts/run_video_job.py --video "path\to\video.mp4" --mode LEFT_RIGHT --name "Job01"
 
-# Run QA checks (pass --require-dist after building dist/)
+# Verify environment, ONNX weights, API config contract & process state
 python scripts/qa_verification.py
 
 # Build standalone executable into dist/HalotecContainerOCR/
 python scripts/build_exe.py
 ```
 
-Optional model training & ONNX export (see `container-detection-drone-view/trainer/`):
+### Model Training and ONNX Export
+
+Scripts for retraining or re-exporting `.pt` weights to ONNX reside in `container-detection-drone-view/trainer/`:
 
 ```powershell
+# Train YOLO detector
+python container-detection-drone-view\trainer\train.py --data "path\to\dataset.yaml" --cfg "container-detection-drone-view\hyper_config\container_detection_hyp.yaml"
+
+# Export .pt checkpoint to FP32 ONNX
 python container-detection-drone-view\trainer\export.py -m "path\to\best.pt" -o "container-detection-drone-view\weight\container_detection_model.onnx" --imgsz 480 480 --opset 11 --overwrite --verify-infer
 ```
 
-## Notes and Limitations
+## Notes and Requirements
 
-- **Windows Required:** `src/utils/security.py` (DPAPI via `crypt32.dll`) and `src/utils/windows_job.py` (`kernel32.dll`) target Windows 10/11.
-- **Fixed ONNX Input Shape:** The default exported ONNX model expects `[1, 3, 480, 480]` FP32 inputs; re-export with `trainer/export.py --dynamic` if experimenting with variable inference sizes.
-- **Packaging Notes:** Pass `--include-local-token` to `scripts/build_exe.py` only for local single-machine testing. Use `iscc installer.iss` with Inno Setup to compile `dist/HalotecContainerOCR/` into a Windows setup executable.
+- **Windows Required:** `src/utils/security.py` (DPAPI via `crypt32.dll`) and `src/utils/windows_job.py` (`kernel32.dll`) require Windows 10/11.
+- **Fixed ONNX Input Shape:** `container_detection_model.onnx` uses static `[1, 3, 480, 480]` FP32 inputs; pass `--dynamic` when exporting if experimenting with other input dimensions.
+- **Windows Installer:** After running `python scripts/build_exe.py`, compile `installer.iss` with Inno Setup (`iscc installer.iss`) to generate the setup executable in `dist_installer/`. Pass `--require-dist` to `scripts/qa_verification.py` to include packaged bundle checks.
