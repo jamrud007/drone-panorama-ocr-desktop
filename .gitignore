@@ -1,0 +1,90 @@
+# Python caches & testing
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+.venv*/
+venv/
+env/
+
+# PyInstaller build & installer outputs
+build/
+build_cuda/
+dist/
+dist_installer/
+*.manifest
+*.egg
+self_check.json
+
+# Runtime outputs, logs, and local databases
+outputs/*
+!outputs/.gitkeep
+logs/
+*.log
+data/*
+!data/.gitkeep
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Credentials, secrets, and DPAPI tokens
+*.dpapi
+.token.dpapi
+.env
+.env.*
+!.env.example
+
+# Large model weights & datasets (managed externally or via Git LFS if enabled)
+*.pt
+*.pth
+*.engine
+*.trt
+container-detection-drone-view/weight/*.onnx
+
+# Media & video datasets
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Local configuration override (track config/config.example.json template instead)
+config/config.json
+
+# AI assistant workspace rules, local skills & extended local docs
+GEMINI.md
+.agent/
+TDD_Container_OCR_Windows_v1.9.md
+CONTRIBUTING.md
+docs/
+container-detection-drone-view/README.md
+container-detection-drone-view/requirements-dev.txt
+
+# Local scratch & ad-hoc evaluation/audit scripts and outputs
+scratch/
+runs/
+test_output_*/
+test_engine_output/
+TrackingDetection-LigthGlueForimageStictich/
+scripts/test_*.py
+scripts/verify_video_outputs.py
+crop_*.jpg
+
+# IDE & OS metadata
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,18 @@
+# Development, testing, model export, and packaging dependencies
+-r requirements.txt
+
+# Testing & QA
+pytest==9.0.2
+psutil==7.2.1
+
+# Windows Packaging
+pyinstaller==6.17.0
+
+# ONNX Export & Analytics (container-detection-drone-view/trainer/export.py)
+onnx==1.20.0
+onnxslim==0.1.82
+matplotlib==3.11.2
+
+# Optional static analysis (install when running lint/typecheck)
+# mypy>=1.11.0
+# ruff>=0.6.0
