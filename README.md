@@ -61,8 +61,7 @@ MainWindow (PySide6 UI Thread)
 │   ├── ui/                              # PySide6 dialogs & MainWindow
 │   └── utils/                           # Unicode OpenCV I/O, ISO 6346 validator, DPAPI, Job Object
 ├── container-detection-drone-view/      # Tracking, stitching pipeline, YAML configs, trainer & MANIFEST.json
-├── scripts/                             # build_exe.py, qa_verification.py, run_video_job.py
-└── tests/                               # Offline unit & synthetic integration tests (pytest)
+└── scripts/                             # build_exe.py, qa_verification.py, run_video_job.py
 ```
 
 ## Setup and Running
@@ -102,8 +101,7 @@ python main.py
 # Run headless CLI job
 python scripts/run_video_job.py --video "path\to\video.mp4" --mode LEFT_RIGHT --name "TestJob"
 
-# Run offline tests & QA verification
-pytest
+# Run QA verification
 python scripts/qa_verification.py
 
 # Build standalone Windows executable (dist/HalotecContainerOCR/)

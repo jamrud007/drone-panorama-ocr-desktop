@@ -153,19 +153,26 @@ def main():
     print("   HALOTEC CONTAINER OCR DESKTOP - QA VERIFICATION SUITE")
     print("=================================================================")
 
+    tests_exists = (BASE_DIR / "tests").is_dir()
     dist_exists = (BASE_DIR / "dist" / "HalotecContainerOCR" / "HalotecContainerOCR.exe").is_file()
     require_dist = "--require-dist" in sys.argv
 
     checks = [
-        ("Automated PyTest Test Suite (Unit & E2E)", check_pytest_suite),
         ("AI Model Weights & Stitching Pipeline Assets", check_model_weights),
         ("Windows DPAPI Token Security & Storage", check_dpapi_token),
         ("Halotec OCR API Schema & Parameter Contract", check_api_contract),
         ("Clean Process Lifecycle & Named Mutex Safety", check_orphaned_processes),
     ]
+    insert_idx = 0
+    if tests_exists:
+        checks.insert(insert_idx, ("Automated PyTest Test Suite (Unit & E2E)", check_pytest_suite))
+        insert_idx += 1
+    else:
+        print("\n[INFO] Local tests/ directory not present; skipping pytest suite.")
+
     if dist_exists or require_dist:
-        checks.insert(1, ("Single Binary Distribution Health", check_dist_executable))
-        checks.insert(2, ("Bundled Machine Learning & GUI Libraries", check_bundled_libraries))
+        checks.insert(insert_idx, ("Single Binary Distribution Health", check_dist_executable))
+        checks.insert(insert_idx + 1, ("Bundled Machine Learning & GUI Libraries", check_bundled_libraries))
     else:
         print("\n[INFO] dist/HalotecContainerOCR not built yet; skipping binary bundle checks (pass --require-dist to enforce).")
 

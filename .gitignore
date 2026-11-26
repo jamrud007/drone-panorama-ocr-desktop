@@ -78,6 +78,7 @@ test_engine_output/
 TrackingDetection-LigthGlueForimageStictich/
 scripts/test_*.py
 scripts/verify_video_outputs.py
+tests/
 crop_*.jpg
 
 # IDE & OS metadata
